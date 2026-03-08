@@ -1,16 +1,8 @@
 import React from 'react';
-import { Home, Search, Library, Plus, ArrowRight, ArrowLeft, ChevronRight, ChevronLeft, Play, LayoutGrid, List, MonitorSpeaker, Mic2, Maximize2, Volume2, Volume1, Volume, VolumeX, Heart, Pause, SkipBack, SkipForward, Repeat, Shuffle, Trash2, Edit2 } from 'lucide-react';
+import { Home, Search, Library, Plus, ArrowRight, ArrowLeft, ChevronRight, ChevronLeft, Play, LayoutGrid, List, MonitorSpeaker, Mic2, Maximize2, Volume2, Volume1, Volume, VolumeX, Heart, Pause, SkipBack, SkipForward, Repeat, Shuffle, Trash2, Edit2, X } from 'lucide-react';
 import './App.css';
 import { usePlayer } from './context/PlayerContext';
-
-const MOCK_TRACKS = [
-  { id: 1, title: "Starboy", artist: "The Weeknd, Daft Punk", imgClass: "img-3", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", vibes: ['night', 'cool', 'energetic', 'party'] },
-  { id: 2, title: "Midnight City", artist: "M83", imgClass: "gradient-1", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", vibes: ['chill', 'travel', 'nostalgia', 'dreamy'] },
-  { id: 3, title: "Get Lucky", artist: "Daft Punk", imgClass: "img-1", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", vibes: ['happy', 'summer', 'dance', 'fun'] },
-  { id: 4, title: "Blinding Lights", artist: "The Weeknd", imgClass: "img-0", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3", vibes: ['fast', 'night', 'drive', 'retro'] },
-  { id: 5, title: "Levitating", artist: "Dua Lipa", imgClass: "img-2", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3", vibes: ['pop', 'dance', 'happy', 'party'] },
-  { id: 6, title: "Don't Start Now", artist: "Dua Lipa", imgClass: "gradient-2", audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3", vibes: ['breakup', 'empowering', 'dance', 'pop'] },
-];
+// Removed MOCK_TRACKS because it contained non-database songs
 
 const getVibeScore = (track, query) => {
   if (!query) return 0;
@@ -24,11 +16,100 @@ const getVibeScore = (track, query) => {
 };
 
 function App() {
-  const { currentTrack, isPlaying, playTrack, togglePlay, nextTrack, prevTrack, seekTo, currentTime, duration, toggleLike, isLiked, volume, isMuted, setAudioVolume, toggleMute, playlists, createPlaylist, deletePlaylist, renamePlaylist, addTrackToPlaylist, removeTrackFromPlaylist, likedSongs, queue, currentTrackIndex, addToQueue, playQueueTrack } = usePlayer();
+  const { currentTrack, isPlaying, playTrack, togglePlay, nextTrack, prevTrack, seekTo, currentTime, duration, toggleLike, isLiked, volume, isMuted, setAudioVolume, toggleMute, playlists, createPlaylist, deletePlaylist, renamePlaylist, addTrackToPlaylist, removeTrackFromPlaylist, likedSongs, queue, currentTrackIndex, addToQueue, playQueueTrack, recentlyPlayed } = usePlayer();
   const [view, setView] = React.useState('home');
   const [activePlaylistId, setActivePlaylistId] = React.useState(null);
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchResults, setSearchResults] = React.useState([]);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [searchError, setSearchError] = React.useState(null);
   const [contextMenu, setContextMenu] = React.useState(null); // { x, y, track, playlistId }
+
+  const [homeResults, setHomeResults] = React.useState([]);
+
+  // Fetch a default set of tracks for the Home screen on mount
+  React.useEffect(() => {
+    const fetchHome = async () => {
+      try {
+        const response = await fetch(`http://127.0.0.1:8000/search?vibe=happy`);
+        if (response.ok) {
+          const data = await response.json();
+          const mappedData = data.map((item, index) => ({
+            id: `api-track-${index}`,
+            title: item.track_name,
+            artist: item.track_artist,
+            imgClass: `img-${index % 4}`,
+            spotifyAlbumArt: item.spotify_album_art,
+            spotifyListeners: item.spotify_listeners,
+            spotifyUri: item.spotify_uri,
+            youtubeId: item.youtube_id,
+            audioUrl: item.spotify_preview_url || `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-${(index % 16) + 1}.mp3`,
+            vibes: item.moods || []
+          }));
+          setHomeResults(mappedData);
+        }
+      } catch (err) {
+        console.error("API home load error:", err);
+      }
+    };
+    fetchHome();
+  }, []);
+
+  React.useEffect(() => {
+    if (!searchQuery) {
+      setSearchResults([]);
+      setSearchError(null);
+      setIsLoading(false);
+      return;
+    }
+
+    let isCancelled = false;
+    const fetchSearch = async () => {
+      setIsLoading(true);
+      setSearchError(null);
+      try {
+        const response = await fetch(`http://127.0.0.1:8000/search?vibe=${encodeURIComponent(searchQuery)}`);
+        
+        if (!response.ok) {
+           throw new Error("Backend server error");
+        }
+        
+        const data = await response.json();
+        
+        if (!isCancelled) {
+            const mappedData = data.map((item, index) => ({
+              id: `api-track-${index}`,
+              title: item.track_name,
+              artist: item.track_artist,
+              imgClass: `img-${index % 4}`,
+              spotifyAlbumArt: item.spotify_album_art,
+              spotifyListeners: item.spotify_listeners,
+              spotifyUri: item.spotify_uri,
+              youtubeId: item.youtube_id,
+              audioUrl: item.spotify_preview_url || `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-${(index % 16) + 1}.mp3`,
+              vibes: item.moods || []
+            }));
+          setSearchResults(mappedData);
+        }
+      } catch (err) {
+        if (!isCancelled) {
+          console.error("API search error:", err);
+          setSearchError("❌ Unable to connect to the backend server. Make sure it is running.");
+          setSearchResults([]);
+        }
+      } finally {
+        if (!isCancelled) {
+           setIsLoading(false);
+        }
+      }
+    };
+
+    const timeoutId = setTimeout(fetchSearch, 300);
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [searchQuery]);
 
   // Close context menu on click elsewhere
   React.useEffect(() => {
@@ -53,9 +134,9 @@ function App() {
     setView('playlist');
   };
 
-  const handlePlay = (track, e) => {
+  const handlePlay = (track, e, contextList = []) => {
     e.stopPropagation();
-    playTrack(track, MOCK_TRACKS); // Pass the full list as the queue context
+    playTrack(track, contextList); 
   };
 
   const isCurrentTrack = (trackId) => currentTrack?.id === trackId;
@@ -91,24 +172,7 @@ function App() {
               <button className="icon-btn" onClick={createAndNav}>
                 <Plus size={20} />
               </button>
-              <button className="icon-btn">
-                <ArrowRight size={20} />
-              </button>
             </div>
-          </div>
-
-          <div className="tags-scroll">
-            <span className="pill">Playlists</span>
-            <span className="pill">Artists</span>
-            <span className="pill">Podcasts & Shows</span>
-          </div>
-
-          <div className="lib-search-header">
-            <button className="icon-btn xs"><Search size={16} /></button>
-            <button className="sort-btn">
-              <span>Recents</span>
-              <List size={16} />
-            </button>
           </div>
 
           <div className="playlist-list custom-scroll">
@@ -144,17 +208,30 @@ function App() {
       <main className="main-view card-style">
         <header className="top-bar">
           <div className="nav-controls">
-            {view === 'search' && (
-              <div className="search-container">
+            {(view === 'search' || view === 'home') && (
+              <div className="search-container" style={{ position: 'relative' }}>
                 <Search size={20} className="search-icon-input" />
                 <input
                   type="text"
                   placeholder="What do you want to play?"
                   className="search-input"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  autoFocus
+                  onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      if (view !== 'search') setView('search');
+                  }}
+                  autoFocus={view === 'search'}
                 />
+                {searchQuery && (
+                  <X 
+                    size={20} 
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSearchResults([]);
+                    }} 
+                    style={{ position: 'absolute', right: 12, top: 14, color: '#b3b3b3', cursor: 'pointer' }}
+                  />
+                )}
               </div>
             )}
           </div>
@@ -171,24 +248,26 @@ function App() {
               <section className="good-morning">
                 <h2>Good morning</h2>
                 <div className="hero-grid">
-                  {MOCK_TRACKS.slice(0, 6).map((track, i) => (
+                  {homeResults.slice(0, 6).map((track, i) => (
                     <div key={track.id} className="hero-card"
-                      onClick={() => playTrack(track, MOCK_TRACKS)}
+                      onClick={() => playTrack(track, homeResults)}
                       onContextMenu={(e) => handleContextMenu(e, track)}
                     >
-                      <div className={`hero-img ${track.imgClass}`}>
-                        {isLiked(track.id) && <Heart size={24} fill="#1ed760" stroke="#1ed760" />}
-                      </div>
-                      <span>{track.title}</span>
-                      <div className="play-btn-hover" style={{ opacity: isCurrentTrack(track.id) ? 1 : undefined, transform: isCurrentTrack(track.id) ? 'translateY(0)' : undefined }}>
-                        <div className="play-icon-circle" onClick={(e) => handlePlay(track, e)}>
-                          {isCurrentTrack(track.id) && isPlaying ? (
-                            <Pause size={20} fill="black" stroke="black" />
-                          ) : (
-                            <Play size={20} fill="black" className="play-arrow" />
-                          )}
+                      <div style={{ position: 'relative' }}>
+                        <div className={`hero-img ${track.imgClass}`} style={{ backgroundImage: track.spotifyAlbumArt ? `url(${track.spotifyAlbumArt})` : 'none', backgroundSize: 'cover' }}>
+                          {isLiked(track.id) && <Heart size={24} fill="#1ed760" stroke="#1ed760" />}
+                        </div>
+                        <div className="play-btn-hover" style={{ opacity: isCurrentTrack(track.id) ? 1 : undefined, transform: isCurrentTrack(track.id) ? 'translateY(0)' : undefined }}>
+                          <div className="play-icon-circle" onClick={(e) => handlePlay(track, e, homeResults)}>
+                            {isCurrentTrack(track.id) && isPlaying ? (
+                              <Pause size={20} fill="black" stroke="black" />
+                            ) : (
+                              <Play size={20} fill="black" className="play-arrow" />
+                            )}
+                          </div>
                         </div>
                       </div>
+                      <span>{track.title}</span>
                     </div>
                   ))}
                 </div>
@@ -199,30 +278,34 @@ function App() {
                   <h2>Recently played</h2>
                   <span className="see-all">Show all</span>
                 </div>
-                <div className="card-row">
-                  {MOCK_TRACKS.slice(0, 4).map((track, i) => (
-                    <div key={track.id} className="content-card"
-                      onClick={() => playTrack(track, MOCK_TRACKS)}
-                      onContextMenu={(e) => handleContextMenu(e, track)}
-                    >
-                      <div className="card-img-container">
-                        <div className={`card-img ${track.imgClass}`}></div>
-                        <div className="card-play-btn" style={{ opacity: isCurrentTrack(track.id) ? 1 : undefined, transform: isCurrentTrack(track.id) ? 'translateY(0)' : undefined }}>
-                          <div className="play-icon-circle large">
-                            {isCurrentTrack(track.id) && isPlaying ? (
-                              <Pause size={24} fill="black" stroke="black" />
-                            ) : (
-                              <Play size={24} fill="black" className="play-arrow" />
-                            )}
+                <div className="card-row flex gap-4 overflow-x-auto">
+                  {recentlyPlayed.length === 0 ? (
+                    <div style={{ color: '#b3b3b3', fontSize: 14, padding: '24px 0' }}>Listen to some songs, and they will appear here!</div>
+                  ) : (
+                    recentlyPlayed.slice(0, 6).map((track, i) => (
+                      <div key={`recent-${track.id}-${i}`} className="content-card shrink-0"
+                        onClick={() => playTrack(track, recentlyPlayed)}
+                        onContextMenu={(e) => handleContextMenu(e, track)}
+                      >
+                        <div className="card-img-container">
+                          <div className={`card-img ${track.imgClass}`} style={{ backgroundImage: track.spotifyAlbumArt ? `url(${track.spotifyAlbumArt})` : 'none', backgroundSize: 'cover' }}></div>
+                          <div className="card-play-btn" style={{ opacity: isCurrentTrack(track.id) ? 1 : undefined, transform: isCurrentTrack(track.id) ? 'translateY(0)' : undefined }}>
+                            <div className="play-icon-circle large">
+                              {isCurrentTrack(track.id) && isPlaying ? (
+                                <Pause size={24} fill="black" stroke="black" />
+                              ) : (
+                                <Play size={24} fill="black" className="play-arrow" />
+                              )}
+                            </div>
                           </div>
                         </div>
+                        <div className="card-text">
+                          <div className="card-title">{track.title}</div>
+                          <div className="card-sub">{track.artist}</div>
+                        </div>
                       </div>
-                      <div className="card-text">
-                        <div className="card-title">{track.title}</div>
-                        <div className="card-sub">{track.artist}</div>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </section>
 
@@ -267,12 +350,21 @@ function App() {
                 <div className="search-results">
                   {(() => {
                     // Vibe Search Logic
-                    const vibeResults = MOCK_TRACKS
-                      .map(t => ({ ...t, score: getVibeScore(t, searchQuery) }))
-                      .filter(t => t.score > 0)
-                      .sort((a, b) => b.score - a.score);
+                    const vibeResults = searchResults;
 
                     const topMatch = vibeResults.length > 0 ? vibeResults[0] : null;
+
+                    if (isLoading) return (
+                      <div style={{ textAlign: 'center', marginTop: 40, color: '#b3b3b3' }}>
+                        <p>Loading vibes...</p>
+                      </div>
+                    );
+                    
+                    if (searchError) return (
+                      <div style={{ textAlign: 'center', marginTop: 40, color: '#ff4d4d' }}>
+                        <p>{searchError}</p>
+                      </div>
+                    );
 
                     if (vibeResults.length === 0) return (
                       <div style={{ textAlign: 'center', marginTop: 40, color: '#b3b3b3' }}>
@@ -289,14 +381,13 @@ function App() {
                             <div className="top-result-card card-style"
                               onClick={() => playTrack(topMatch, vibeResults)}
                               onContextMenu={(e) => handleContextMenu(e, topMatch)}>
-                              <div className={`hero-img large ${topMatch.imgClass}`}></div>
+                              <div className={`hero-img large ${topMatch.imgClass}`} style={{ backgroundImage: topMatch.spotifyAlbumArt ? `url(${topMatch.spotifyAlbumArt})` : 'none', backgroundSize: 'cover' }}></div>
                               <div className="top-res-title">{topMatch.title}</div>
                               <div className="top-res-sub">
                                 <span className="pill-dark">Vibe Match</span>
                                 <span style={{ marginLeft: 8 }}>{topMatch.artist}</span>
                               </div>
                               <div style={{ marginTop: 8 }}>
-                                {topMatch.vibes.map(v => <span key={v} style={{ fontSize: 12, opacity: 0.7, marginRight: 6 }}>#{v}</span>)}
                               </div>
                             </div>
                           )}
@@ -308,11 +399,10 @@ function App() {
                               onClick={() => playTrack(track, vibeResults)}
                               onContextMenu={(e) => handleContextMenu(e, track)}
                             >
-                              <div className={`skel-img ${track.imgClass}`}></div>
+                              <div className={`skel-img ${track.imgClass}`} style={{ backgroundImage: track.spotifyAlbumArt ? `url(${track.spotifyAlbumArt})` : 'none', backgroundSize: 'cover' }}></div>
                               <div className="list-text">
                                 <div className="list-title">{track.title}</div>
                                 <div className="list-sub" style={{ display: 'flex', gap: 6 }}>
-                                  {track.vibes.slice(0, 2).map(v => <span key={v} style={{ color: '#1ed760' }}>#{v}</span>)}
                                 </div>
                               </div>
                               <div style={{ marginLeft: 'auto' }}>
@@ -346,8 +436,11 @@ function App() {
 
               <div className="playlist-actions">
                 <button className="green-large" onClick={() => {
-                  const likedTracks = MOCK_TRACKS.filter(t => likedSongs.has(t.id));
-                  if (likedTracks.length) playTrack(likedTracks[0], likedTracks);
+                  let lTracks = [];
+                  if (homeResults.length) {
+                    lTracks = homeResults.filter(t => likedSongs.has(t.id));
+                    if (lTracks.length) playTrack(lTracks[0], lTracks);
+                  }
                 }}>
                   <Play size={24} fill="black" className="play-arrow" />
                 </button>
@@ -362,8 +455,8 @@ function App() {
                 </div>
                 <div className="tracks-hr"></div>
                 {(() => {
-                  const likedTracks = MOCK_TRACKS.filter(t => likedSongs.has(t.id));
-                  if (likedTracks.length === 0) {
+                  const lTracks = homeResults.filter(t => likedSongs.has(t.id));
+                  if (lTracks.length === 0) {
                     return (
                       <div className="empty-playlist-state">
                         <h3>Songs you like will appear here</h3>
@@ -372,9 +465,9 @@ function App() {
                       </div>
                     )
                   }
-                  return likedTracks.map((track, i) => (
+                  return lTracks.map((track, i) => (
                     <div key={`${track.id}`} className="list-item playlist-row"
-                      onClick={() => playTrack(track, likedTracks)}
+                      onClick={() => playTrack(track, lTracks)}
                       onContextMenu={(e) => handleContextMenu(e, track)}
                     >
                       <div className="row-idx">
@@ -540,7 +633,7 @@ function App() {
         {currentTrack ? (
           <>
             <div className="np-art large-shadow">
-              <div className={`np-img-contain ${currentTrack.imgClass}`}></div>
+              <div className={`np-img-contain ${currentTrack.imgClass}`} style={{ backgroundImage: currentTrack.spotifyAlbumArt ? `url(${currentTrack.spotifyAlbumArt})` : 'none', backgroundSize: 'cover' }}></div>
             </div>
             <div className="np-track-info">
               <div className="track-head">
@@ -570,10 +663,10 @@ function App() {
 
             <div className="np-card-about">
               <div className="about-header">About the artist</div>
-              <div className={`artist-img ${currentTrack.imgClass}`}></div>
+              <div className={`artist-img ${currentTrack.imgClass}`} style={{ backgroundImage: currentTrack.spotifyAlbumArt ? `url(${currentTrack.spotifyAlbumArt})` : 'none', backgroundSize: 'cover' }}></div>
               <div className="artist-name-bold">{currentTrack.artist}</div>
               <div className="monthly-listeners">
-                <span>105,432,100 monthly listeners</span>
+                <span>{currentTrack?.spotifyListeners ? currentTrack.spotifyListeners.toLocaleString() : "105,432,100"} monthly listeners</span>
               </div>
               <p className="artist-desc">
                 {currentTrack.artist} is a popular artist known for their unique sound and style.
@@ -591,7 +684,7 @@ function App() {
         {currentTrack ? (
           <>
             <div className="bp-left">
-              <div className={`bp-img ${currentTrack.imgClass}`}></div>
+              <div className={`bp-img ${currentTrack.imgClass}`} style={{ backgroundImage: currentTrack.spotifyAlbumArt ? `url(${currentTrack.spotifyAlbumArt})` : 'none', backgroundSize: 'cover' }}></div>
               <div className="bp-info">
                 <div className="bp-title">{currentTrack.title}</div>
                 <div className="bp-artist">{currentTrack.artist}</div>

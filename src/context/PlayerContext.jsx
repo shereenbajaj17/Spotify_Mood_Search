@@ -14,9 +14,10 @@ export const PlayerProvider = ({ children }) => {
     const [volume, setVolume] = useState(1);
     const [isMuted, setIsMuted] = useState(false);
     const [playlists, setPlaylists] = useState([
-        { id: 'liked', name: 'Liked Songs', tracks: [] } // 'Liked' is special, but we can treat generic playlists similarly
+        { id: 'liked', name: 'Liked Songs', tracks: [] } 
     ]);
-    const [likedSongs, setLikedSongs] = useState(new Set([1, 2, 4, 6])); // Mock initial likes
+    const [likedSongs, setLikedSongs] = useState(new Set()); 
+    const [recentlyPlayed, setRecentlyPlayed] = useState([]);
 
     const audioRef = useRef(new Audio());
 
@@ -61,19 +62,40 @@ export const PlayerProvider = ({ children }) => {
             setCurrentTrackIndex(index !== -1 ? index : 0);
         }
 
+        // Fallback to local audio element (for mock tracks)
         _playAudio(track);
     };
 
     const _playAudio = (track) => {
         const audio = audioRef.current;
+        if (!audio) return;
+        
+        // Stop current playing audio properly to make the source truly switch
+        audio.pause();
+        
         audio.src = track.audioUrl;
+        audio.load();
+        
         audio.play().then(() => {
             setIsPlaying(true);
+            
+            // Add to recently played (avoiding back-to-back duplicates)
+            setRecentlyPlayed(prev => {
+                const isDuplicate = prev.length > 0 && prev[0].id === track.id;
+                if (isDuplicate) return prev;
+                // keep up to 10 recently played items
+                return [track, ...prev].slice(0, 10);
+            });
+            
         }).catch(e => console.error("Audio play error:", e));
+        
         setCurrentTrack(track);
     };
 
-    const togglePlay = () => {
+    const togglePlay = async () => {
+        if (!currentTrack) return;
+        
+        // Fallback Local
         const audio = audioRef.current;
         if (isPlaying) {
             audio.pause();
@@ -146,12 +168,10 @@ export const PlayerProvider = ({ children }) => {
     };
 
     const setAudioVolume = (vol) => {
-        const audio = audioRef.current;
-        if (audio) {
-            audio.volume = vol;
-            setVolume(vol);
-            if (vol > 0 && isMuted) setIsMuted(false);
-        }
+        setVolume(vol);
+        if (isMuted) return; // Leave at 0 internally but save preference
+        
+        audioRef.current.volume = vol;
     };
 
     const toggleMute = () => {
@@ -242,9 +262,11 @@ export const PlayerProvider = ({ children }) => {
             removeTrackFromPlaylist,
             likedSongs,
             setLikedSongs,
+            recentlyPlayed,
             queue,
             currentTrackIndex,
             addToQueue,
+            playQueueTrack,
             playQueueTrack
         }}>
             {children}
