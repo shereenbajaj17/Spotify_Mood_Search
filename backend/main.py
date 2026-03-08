@@ -51,9 +51,9 @@ MOOD_PROTOTYPES = [
     'romantic', 'sad', 'serene', 'tender', 'workout'
 ]
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Load data on startup
+import asyncio
+
+def load_ml_data_sync():
     data_dir = os.path.join(os.path.dirname(__file__), "data")
     print(f"Loading ML data from {data_dir}...")
     
@@ -79,10 +79,23 @@ async def lifespan(app: FastAPI):
         index.add(embeddings)
         ml_data['faiss_index'] = index
         print("Successfully created FAISS index.")
+        ml_data['loaded'] = True
     except Exception as e:
         print(f"Error loading ML data: {e}")
-        
+
+async def load_ml_data_background():
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, load_ml_data_sync)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Launch the slow ML load in a background executor thread!
+    # This immediately unblocks `uvicorn` so it can scan open ports 
+    # and satisfy Render's health checks within the 60s timeout limit.
+    print("Spawning background task to load ML Models...")
+    asyncio.create_task(load_ml_data_background())
     yield
+    
     # Clean up on shutdown
     ml_data.clear()
     print("ML data unloaded.")
@@ -108,8 +121,8 @@ def health_check():
 
 @app.get("/search")
 def search_vibe(vibe: str):
-    if 'model' not in ml_data or 'faiss_index' not in ml_data or 'metadata' not in ml_data or 'moods' not in ml_data:
-        return {"error": "ML data not fully loaded yet"}
+    if not ml_data.get('loaded'):
+        return {"error": "Server is waking up and booting ML Models (this takes ~60 seconds on free tier). Please try again in a minute!"}
         
     query_embedding = ml_data['model'].encode([vibe]).astype('float32')
     index = ml_data['faiss_index']
