@@ -31,7 +31,7 @@ function App() {
   React.useEffect(() => {
     const fetchHome = async () => {
       try {
-        const response = await fetch(`http://127.0.0.1:8000/search?vibe=happy`);
+        const response = await fetch(`https://spotify-vibe-api.onrender.com/search?vibe=happy`);
         if (response.ok) {
           const data = await response.json();
           const mappedData = data.map((item, index) => ({
@@ -68,7 +68,7 @@ function App() {
       setIsLoading(true);
       setSearchError(null);
       try {
-        const response = await fetch(`http://127.0.0.1:8000/search?vibe=${encodeURIComponent(searchQuery)}`);
+        const response = await fetch(`https://spotify-vibe-api.onrender.com/search?vibe=${encodeURIComponent(searchQuery)}`);
         
         if (!response.ok) {
            throw new Error("Backend server error");
