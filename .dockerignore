@@ -1,0 +1,15 @@
+.git
+node_modules
+backend/venv
+backend/__pycache__
+*.md
+*.zip
+.vite
+.DS_Store
+public
+src
+index.html
+vite.config.js
+package*.json
+eslint.config.js
+gh.tar.gz
