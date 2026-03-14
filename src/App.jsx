@@ -2,6 +2,8 @@ import React from 'react';
 import { Home, Search, Library, Plus, ArrowRight, ArrowLeft, ChevronRight, ChevronLeft, Play, LayoutGrid, List, MonitorSpeaker, Mic2, Maximize2, Volume2, Volume1, Volume, VolumeX, Heart, Pause, SkipBack, SkipForward, Repeat, Shuffle, Trash2, Edit2, X } from 'lucide-react';
 import './App.css';
 import { usePlayer } from './context/PlayerContext';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:7860';
 // Removed MOCK_TRACKS because it contained non-database songs
 
 const getVibeScore = (track, query) => {
@@ -31,7 +33,7 @@ function App() {
   React.useEffect(() => {
     const fetchHome = async () => {
       try {
-        const response = await fetch(`https://spotify-vibe-api.onrender.com/search?vibe=happy`);
+        const response = await fetch(`${API_URL}/search?vibe=happy`);
         if (response.ok) {
           const data = await response.json();
           const mappedData = data.map((item, index) => ({
@@ -68,7 +70,7 @@ function App() {
       setIsLoading(true);
       setSearchError(null);
       try {
-        const response = await fetch(`https://spotify-vibe-api.onrender.com/search?vibe=${encodeURIComponent(searchQuery)}`);
+        const response = await fetch(`${API_URL}/search?vibe=${encodeURIComponent(searchQuery)}`);
         
         if (!response.ok) {
            throw new Error("Backend server error");

@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Build caches
+.vite/
+__pycache__/
+
+# Archives
+*.zip
+*.tar.gz
