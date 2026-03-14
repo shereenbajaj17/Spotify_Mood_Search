@@ -1,15 +1,18 @@
-FROM python:3.10
+FROM python:3.10-slim
 
-WORKDIR /code
+# Install system deps needed by faiss-cpu
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+ && rm -rf /var/lib/apt/lists/*
 
-COPY ./backend/requirements.txt /code/requirements.txt
+WORKDIR /app
 
-RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
+# Install Python dependencies first (cached layer)
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir --upgrade -r requirements.txt
 
-COPY ./ /code/backend/
+# Copy only the backend source code and data
+COPY backend/ .
 
-# Set the working directory to where main.py is
-WORKDIR /code/backend
-
-# Run the FastAPI server on the huggingface default port 7860
+# Run the FastAPI server
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
