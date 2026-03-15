@@ -4,6 +4,6 @@ numpy==1.26.4
 pandas==2.2.3
 fastembed==0.7.3
 python-multipart==0.0.12
-faiss-cpu==1.8.0
+faiss-cpu==1.13.2
 requests==2.32.3
 python-dotenv==1.0.1
