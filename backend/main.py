@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import numpy as np
 import pandas as pd
 import ast
-from fastembed import TextEmbedding
+from sentence_transformers import SentenceTransformer
 import faiss
 import requests
 import base64
@@ -68,10 +68,10 @@ def load_ml_data_sync():
         ml_data['moods'] = pd.read_csv(os.path.join(data_dir, "spotify_moods_db.csv"))
         print("Successfully loaded spotify_moods_db.csv")
         
-        print("Loading TextEmbedding model (fastembed)...")
-        model = TextEmbedding(model_name='sentence-transformers/all-MiniLM-L6-v2')
+        print("Loading SentenceTransformer model...")
+        model = SentenceTransformer('all-MiniLM-L6-v2')
         ml_data['model'] = model
-        print("Successfully loaded fastembed model")
+        print("Successfully loaded SentenceTransformer model")
         
         print("Creating FAISS index...")
         embedding_dim = embeddings.shape[1]
@@ -124,7 +124,7 @@ def search_vibe(vibe: str):
     if not ml_data.get('loaded'):
         return {"error": "Server is waking up and booting ML Models (this takes ~60 seconds on free tier). Please try again in a minute!"}
         
-    query_embedding = np.array(list(ml_data['model'].embed([vibe]))).astype('float32')
+    query_embedding = ml_data['model'].encode([vibe]).astype('float32')
     index = ml_data['faiss_index']
     
     top_k = 10
